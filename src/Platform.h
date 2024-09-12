@@ -18,6 +18,16 @@
 #include <Windows.h>
 #include <Winsock2.h>
 #include <ws2tcpip.h>
+#elif defined(__APPLE__)
+#include <dispatch/dispatch.h>
+#include <mach/mach_time.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <sys/time.h>
+#include <sys/ioctl.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <fcntl.h>
 #elif defined(__vita__)
 #include <unistd.h>
 #include <sys/time.h>
@@ -70,9 +80,19 @@
 #include <stdio.h>
 #include "Limelight.h"
 
-#define Limelog(s, ...) \
+#if defined(LC_DARWIN)
+// Don't give the SDL logger a chance to slow down any threads
+# define Limelog(s, ...) \
+    if (ListenerCallbacks.logMessage) { \
+        dispatch_async(dispatch_get_main_queue(), ^{ \
+            ListenerCallbacks.logMessage(s, ##__VA_ARGS__); \
+        }); \
+    }
+#else
+# define Limelog(s, ...) \
     if (ListenerCallbacks.logMessage) \
         ListenerCallbacks.logMessage(s, ##__VA_ARGS__)
+#endif
 
 #if defined(LC_WINDOWS)
 #include <crtdbg.h>
@@ -146,6 +166,11 @@
 
 int initializePlatform(void);
 void cleanupPlatform(void);
+bool PltSafeStrcpy(char* dest, size_t dest_size, const char* src);
+
+void PltTicksInit(void);
+
+uint64_t PltGetMicroseconds(void);
 
 uint64_t PltGetMillis(void);
-bool PltSafeStrcpy(char* dest, size_t dest_size, const char* src);
+
